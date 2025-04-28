@@ -63,26 +63,71 @@ struct withHight {
 dakakuData data;
 withHight data2;
 
+const int pin = A0;
+
 
 SoftwareSerial mySerial(12, 11);
 
 void setup() {
   Serial.begin(115200);
   mySerial.begin(9600);
+
+  pinMode(pin, INPUT);
 }
 
 void loop() {
   if (mySerial.available() >= sizeof(data)) {
     mySerial.readBytes((uint8_t*)&data, sizeof(data));
-    Serial.print("rudder: ");
-    Serial.println(data.rudder);
-    Serial.print("elevetor: ");
-    Serial.println(data.elevetor);
+    
   }
   data2.rudder = data.rudder;
   data2.elevetor = data.elevetor;
 
+  int h = 0;
+  int datasum = 0;
+  int rawdata[5];
 
+  for (int i = 0; i < 4; i++) {
+    rawdata[i] = 0;
+  }
+
+
+  for (int i = 0; i < 4; i++) {
+    rawdata[i] = analogRead(pin);
+    
+    datasum = datasum + rawdata[i];
+  }
+
+
+  int rawmax = 0;
+  int rawmin = 0;
+
+  for (int i = 0; i < 4; i++) {
+    if (rawmax < rawdata[i]) {
+      rawmax = rawdata[i];
+    }
+  }
+
+  for (int i = 0; i < 4; i++) {
+    if (rawmin > rawdata[i]) {
+      rawmin = rawdata[i];
+    }
+  }
+
+  h = (datasum - rawmax - rawmin ) / 3;
+  Serial.println(h);
+  
+  data2.hight = h;
+  
+  Serial.println(millis());
+  Serial.print("rudder: ");
+  Serial.println(data.rudder);
+  Serial.print("elevetor: ");
+  Serial.println(data.elevetor);
+  Serial.print("hight: ");
+  Serial.println(data2.hight);
+
+  delay(100); // 適切な受信間隔を設定
 
 }
 
