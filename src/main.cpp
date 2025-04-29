@@ -189,11 +189,14 @@
 
 
 // ESP32側で、とりあえずUnoからのデータを受信
+//姿勢、RPMを追加
 #include <Arduino.h>
 #include <Wire.h>
 #include <Adafruit_Sensor.h>
 #include <Adafruit_BNO055.h>
 #include <utility/imumaths.h>
+#include <TinyGPSPlus.h>
+
 
 struct withHight {
   float rudder = 0;
@@ -209,20 +212,33 @@ struct mainData {
   float roll = 0;
   float pitch = 0;
   float yaw = 0;
+  float hour = 0;
+  float seconds = 0;
+  float latitude = 0;
+  float longitude = 0;
 };
 
 #define SLAVE_ADDRESS 0x08 // スレーブのアドレス
 
 Adafruit_BNO055 bno = Adafruit_BNO055(-1, 0x28, &Wire);
-
 withHight datawithhight; // 受信データ格納用構造体
 mainData maindata;
+
 
 #define ENCODER_PIN_A 14
 #define ENCODER_PIN_B 15
 
 volatile long pulseCount = 0;
 unsigned long lastMillis = 0;
+
+#define RXD2 17
+#define TXD2 16
+#define GPS_BAUD 9600
+
+TinyGPSPlus gps;
+HardwareSerial gpsSerial(2);
+
+
 
 void countPulse() {
   if (digitalRead(ENCODER_PIN_B) == HIGH) {
@@ -235,10 +251,13 @@ void countPulse() {
 void setup() {
   Serial.begin(115200);
   Wire.begin(); // マスターとして初期化
+  gpsSerial.begin(GPS_BAUD, SERIAL_8N1, RXD2, TXD2);
+
 
   pinMode(ENCODER_PIN_A, INPUT);
   pinMode(ENCODER_PIN_B, INPUT);
   attachInterrupt(digitalPinToInterrupt(ENCODER_PIN_A), countPulse, RISING);
+
 
   if (!bno.begin()) {
     /* There was a problem detecting the BNO055 ... check your connections */
@@ -275,6 +294,20 @@ void loop() {
   maindata.RPM = pulseCount; 
 
   pulseCount = 0;
+  while (gpsSerial.available() > 0) {
+    gps.encode(gpsSerial.read());
+  }
+
+  if(gps.location.isUpdated()) {
+    maindata.latitude = gps.location.lat();
+    maindata.longitude = gps.location.lng();
+  }
+  if(gps.time.isUpdated()) {
+    maindata.hour = gps.time.hour();
+    maindata.seconds = gps.time.second();
+  }
+
+
 
 
   Serial.print("Received rudder: ");
@@ -291,8 +324,23 @@ void loop() {
   Serial.println(maindata.yaw);
   Serial.print("Received RPM: ");
   Serial.println(maindata.RPM);
+  Serial.print("Received hour: ");
+  Serial.println(maindata.hour);
+  Serial.print("Received seconds: ");
+  Serial.println(maindata.seconds);
+  Serial.print("Received latitude: ");
+  Serial.println(maindata.latitude, 6);
+  Serial.print("Received longitude: ");
+  Serial.println(maindata.longitude, 6);
 
   
   
   delay(100); // 送信頻度調整
 }
+
+
+
+
+
+
+
