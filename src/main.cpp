@@ -9,33 +9,33 @@
 
 
 
-// // // 尾翼側で構造体を送信するコード
-// // #include <Arduino.h>
-// // #include "SoftwareSerial.h"
+// // 尾翼側で構造体を送信するコード
+// #include <Arduino.h>
+// #include "SoftwareSerial.h"
 
-// // struct dakakuData {
-// //   float rudder = 0;
-// //   float elevetor = 0;
-// // };
+// struct dakakuData {
+//   float rudder = 0;
+//   float elevetor = 0;
+// };
 
-// // dakakuData data;
-// // SoftwareSerial mySerial(12, 11);
+// dakakuData data;
+// SoftwareSerial mySerial(12, 11);
 
-// // void setup() {
-// //   Serial.begin(115200);
-// //   mySerial.begin(9600);
-// // }
+// void setup() {
+//   Serial.begin(115200);
+//   mySerial.begin(9600);
+// }
 
-// // void loop() {
-// //   data.rudder = random(0, 100);  // ランダムな値
-// //   data.elevetor = random(0, 100);
+// void loop() {
+//   data.rudder = random(0, 100);  // ランダムな値
+//   data.elevetor = random(0, 100);
 
-// //   Serial.print(data.rudder);  // rudderの値を表示
+//   Serial.print(data.rudder);  // rudderの値を表示
 
-// //   mySerial.write((uint8_t*)&data, sizeof(data));
-// //   Serial.println("Data sent!");
-// //   delay(100); // 適切な送信間隔を設定
-// // }
+//   mySerial.write((uint8_t*)&data, sizeof(data));
+//   Serial.println("Data sent!");
+//   delay(100); // 適切な送信間隔を設定
+// }
 
 
 
@@ -191,6 +191,9 @@
 // ESP32側で、とりあえずUnoからのデータを受信
 #include <Arduino.h>
 #include <Wire.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BNO055.h>
+#include <utility/imumaths.h>
 
 struct withHight {
   float rudder = 0;
@@ -198,31 +201,98 @@ struct withHight {
   float hight = 0;
 };
 
+struct mainData {
+  float rudder = 0;
+  float elevetor = 0;
+  float hight = 0;
+  float RPM = 0;
+  float roll = 0;
+  float pitch = 0;
+  float yaw = 0;
+};
+
 #define SLAVE_ADDRESS 0x08 // スレーブのアドレス
 
+Adafruit_BNO055 bno = Adafruit_BNO055(-1, 0x28, &Wire);
 
+withHight datawithhight; // 受信データ格納用構造体
+mainData maindata;
 
-withHight maindata; // 受信データ格納用構造体
+#define ENCODER_PIN_A 14
+#define ENCODER_PIN_B 15
+
+volatile long pulseCount = 0;
+unsigned long lastMillis = 0;
+
+void countPulse() {
+  if (digitalRead(ENCODER_PIN_B) == HIGH) {
+    pulseCount++;
+  } else {
+    pulseCount--;
+  }
+}
 
 void setup() {
   Serial.begin(115200);
   Wire.begin(); // マスターとして初期化
+
+  pinMode(ENCODER_PIN_A, INPUT);
+  pinMode(ENCODER_PIN_B, INPUT);
+  attachInterrupt(digitalPinToInterrupt(ENCODER_PIN_A), countPulse, RISING);
+
+  if (!bno.begin()) {
+    /* There was a problem detecting the BNO055 ... check your connections */
+    Serial.print("Ooops, no BNO055 detected ... Check your wiring or I2C ADDR!");
+    while (1)
+      ;
+  }
 }
 
 void loop() {
-  Wire.requestFrom(SLAVE_ADDRESS, sizeof(maindata)); // 構造体サイズ分データ要求
+  Wire.requestFrom(SLAVE_ADDRESS, sizeof(datawithhight)); // 構造体サイズ分データ要求
 
-  if (Wire.available() >= sizeof(maindata)) { // 必要なバイト数があるか確認
-    Wire.readBytes((uint8_t*)&maindata, sizeof(maindata)); // 構造体全体を取得
+  if (Wire.available() >= sizeof(datawithhight)) { // 必要なバイト数があるか確認
+    Wire.readBytes((uint8_t*)&datawithhight, sizeof(datawithhight)); // 構造体全体を取得
     
     // 受信データを表示
-    Serial.print("Received rudder: ");
-    Serial.println(maindata.rudder);
-    Serial.print("Received elevetor: ");
-    Serial.println(maindata.elevetor);
-    Serial.print("Received hight: ");
-    Serial.println(maindata.hight);
+    // Serial.print("Received rudder: ");
+    // Serial.println(datawithhight.rudder);
+    // Serial.print("Received elevetor: ");
+    // Serial.println(datawithhight.elevetor);
+    // Serial.print("Received hight: ");
+    // Serial.println(datawithhight.hight);
+
+    maindata.rudder = datawithhight.rudder;
+    maindata.elevetor = datawithhight.elevetor;
+    maindata.hight = datawithhight.hight;
   }
+
+  imu::Vector<3> euler = bno.getVector(Adafruit_BNO055::VECTOR_EULER);
+
+  maindata.yaw = euler.x();
+  maindata.pitch = euler.y();
+  maindata.roll = euler.z();
+  maindata.RPM = pulseCount; 
+
+  pulseCount = 0;
+
+
+  Serial.print("Received rudder: ");
+  Serial.println(datawithhight.rudder);
+  Serial.print("Received elevetor: ");
+  Serial.println(datawithhight.elevetor);
+  Serial.print("Received hight: ");
+  Serial.println(datawithhight.hight);
+  Serial.print("Received roll: ");
+  Serial.println(maindata.roll);
+  Serial.print("Received pitch: ");
+  Serial.println(maindata.pitch);
+  Serial.print("Received yaw: ");
+  Serial.println(maindata.yaw);
+  Serial.print("Received RPM: ");
+  Serial.println(maindata.RPM);
+
+  
   
   delay(100); // 送信頻度調整
 }
