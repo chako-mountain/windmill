@@ -196,7 +196,14 @@
 #include <Adafruit_BNO055.h>
 #include <utility/imumaths.h>
 #include <TinyGPSPlus.h>
+#include "FS.h"
+#include "SD.h"
+#include "SPI.h"
 
+int sck = 18;
+int miso = 19;
+int mosi = 23;
+int cs = 5;
 
 struct withHight {
   float rudder = 0;
@@ -265,6 +272,13 @@ void setup() {
     while (1)
       ;
   }
+
+  SPI.begin(sck, miso, mosi, cs);
+  if (!SD.begin(cs)) {
+    Serial.println("Card Mount Failed");
+    return;
+  }
+  Serial.println("SD Card initialized");
 }
 
 void loop() {
@@ -332,6 +346,37 @@ void loop() {
   Serial.println(maindata.latitude, 6);
   Serial.print("Received longitude: ");
   Serial.println(maindata.longitude, 6);
+
+  File file = SD.open("/data.txt", FILE_APPEND);  if (file) {
+    file.print("rudder: ");
+    file.println(maindata.rudder);
+    file.print("elevetor: ");
+    file.println(maindata.elevetor);
+    file.print("hight: ");
+    file.println(maindata.hight);
+    file.print("roll: ");
+    file.println(maindata.roll);
+    file.print("pitch: ");
+    file.println(maindata.pitch);
+    file.print("yaw: ");
+    file.println(maindata.yaw);
+    file.print("RPM: ");
+    file.println(maindata.RPM);
+    file.print("hour: ");
+    file.println(maindata.hour);
+    file.print("seconds: ");
+    file.println(maindata.seconds);
+    file.print("latitude: ");
+    file.println(maindata.latitude, 6);
+    file.print("longitude: ");
+    file.println(maindata.longitude, 6);
+    
+    Serial.println("Data written to SD card");
+    
+  } else {
+    Serial.println("Error opening data.txt");
+  }
+  file.close(); // ファイルを閉じる
 
   
   
